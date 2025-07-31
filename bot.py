@@ -27,6 +27,45 @@ def start_web_server_thread():
     server_thread.start()
 
 
+# --- Custom Help Command ---
+class CustomHelpCommand(commands.HelpCommand):
+    """Custom help command for a cleaner, embedded look."""
+
+    def __init__(self):
+        super().__init__(command_attrs={
+            'help': 'Shows this message'
+        })
+
+    async def send_bot_help(self, mapping):
+        embed = discord.Embed(
+            title="Leise Bot Commands",
+            description="Here are all the available commands:",
+            color=discord.Color.from_rgb(112, 161, 224)
+        )
+        # Filter commands that the user can run
+        for cog, command_list in mapping.items():
+            filtered_commands = await self.filter_commands(command_list, sort=True)
+            command_signatures = [self.get_command_signature(c) for c in filtered_commands]
+            if command_signatures:
+                cog_name = getattr(cog, "qualified_name", "No Category")
+                embed.add_field(name=cog_name, value="\n".join(c.help or "No description" for c in filtered_commands), inline=False)
+
+        embed.set_footer(text=f"Use {self.context.clean_prefix}help <command> for more info on a command.")
+        await self.get_destination().send(embed=embed)
+
+    async def send_command_help(self, command):
+        embed = discord.Embed(
+            title=self.get_command_signature(command),
+            description=command.help or "No description provided.",
+            color=discord.Color.from_rgb(112, 161, 224)
+        )
+        await self.get_destination().send(embed=embed)
+
+    async def send_error_message(self, error):
+        embed = discord.Embed(title="Error", description=error, color=discord.Color.red())
+        await self.get_destination().send(embed=embed)
+
+
 # --- Discord Bot Configuration ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -37,7 +76,8 @@ if not TOKEN:
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Set the custom help command when initializing the bot
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=CustomHelpCommand())
 
 
 # --- Helper Function for Parsing ---
@@ -64,10 +104,11 @@ async def on_ready():
     name='leise',
     help='''Sends a customizable message or embed.
     
-    Usage Examples:
-    !leise message="Hello world"
-    !leise channel=#general message="This is for the general channel."
-    !leise message="Check this out!" link_text="Docs" link="https://discordpy.readthedocs.io/"
+    **Usage Examples:**
+    `!leise message="Hello world"`
+    `!leise channel=#general message="This is for the general channel."`
+    `!leise message="Check this out!" link_text="Docs" link="https://discordpy.readthedocs.io/"`
+    `!leise message="A message" footer="With a footer"`
     '''
 )
 async def send_custom_message(ctx, *, args: str = None):
@@ -132,8 +173,10 @@ async def send_custom_message(ctx, *, args: str = None):
     name='edit',
     help='''Edits a message previously sent by Leise.
     
-    Usage:
-    !edit <message_link> message="New content" footer="Updated footer"
+    **Usage:**
+    `!edit <message_link> message="New content" footer="Updated footer"`
+    
+    You must provide the link to the message you want to edit.
     '''
 )
 async def edit_message(ctx, message_link: str = None, *, args: str = None):
